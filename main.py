@@ -1,9 +1,25 @@
 import time
 import secerts
-import pandas as pd
 from binance.client import Client
+from tensorflow.keras.models import load_model
+import numpy as np
+import pandas as pd
 
-# Replace with your API key and secret
+# Load the model
+model = load_model('my_3rdmodel.keras')  # Load HDF5 format
+# Test with some sample data
+#for i in range(1, 101):  # Loop 100 times
+ #   sample_input = np.random.rand(1, 1440, 5)  # Replace with actual test data
+  #  prediction = model.predict(sample_input)
+   # print("Prediction:", np.argmax(prediction, axis=1))
+    #print(f"Iteration {i}")
+
+   # time.sleep(3)  # Wait for 5 seconds
+#sample_input = np.random.rand(1, 1440, 5)  # Replace with actual test data
+#prediction = model.predict(sample_input)
+#print("Prediction:", np.argmax(prediction, axis=1))
+
+# API key and secret
 api_key = secerts.bin_api_key
 api_secret = secerts.bin_api_secret
 testnet_api_key = secerts.bin_testnet_api_key
@@ -52,12 +68,58 @@ def tradingbot():
     while True:
         curprice = get_current_price(symbol)
         print(f"current price of {symbol}: {curprice}")
+        # Fetch the last 24 hours of minute-by-minute data
+        #symbol = 'BTCUSDT'
+        interval = Client.KLINE_INTERVAL_1MINUTE
+        limit = 1440  # Request 1440 minutes (24 hours)
+
+        # Binance API allows `limit` up to 1000 per call, so fetch in batches if needed
+        if limit > 1000:
+            klines = []
+            for start in range(0, limit, 1000):
+                batch = client.get_klines(symbol=symbol, interval=interval, limit=min(1000, limit - start))
+                klines.extend(batch)
+        else:
+            klines = client.get_klines(symbol=symbol, interval=interval, limit=limit)
+
+        # Convert data into a DataFrame for easier processing
+        columns = ["time", "open", "high", "low", "close", "volume", "close_time",
+                   "quote_asset_volume", "number_of_trades", "taker_buy_base", "taker_buy_quote", "ignore"]
+        df = pd.DataFrame(klines, columns=columns)
+
+        # Convert relevant columns to numeric
+        for col in ["open", "high", "low", "close", "volume"]:
+            df[col] = pd.to_numeric(df[col])
+
+        # Process into the required categories
+        df_processed = pd.DataFrame()
+        df_processed["close"] = df["close"]
+        df_processed["range"] = df["high"] - df["low"]  # High-Low range
+        df_processed["change"] = df["close"] - df["open"]  # Close-Open change
+        df_processed["volatility"] = (df["high"] - df["low"]) / df["open"]  # Relative volatility
+        df_processed["volume"] = df["volume"]
+
+        # Reset the index for clean DataFrame output
+        df_processed.reset_index(drop=True, inplace=True)
+
+        # Display the first few rows
+        print(df_processed.head())
+
+        # Convert to NumPy array if required
+        data_array = df_processed.to_numpy()
+        print(data_array.shape)  # Shape: (1440, 5)
+        data_array = data_array.reshape(1, 1440, 5)
+        prediction = model.predict(data_array)
+        print("Prediction:", np.argmax(prediction, axis=1))
 
 
 
 
-        time.sleep(3)
 
-#tradingbot()
+        time.sleep(60)
+
+tradingbot()
+
+
 
 

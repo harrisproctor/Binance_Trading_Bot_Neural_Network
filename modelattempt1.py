@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import random
 import seaborn as sns
 import tensorflow as tf
+from collections import Counter
 print(tf.__version__)
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
@@ -11,7 +12,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 
 # Load data
-df = pd.read_csv("btcusd_data_2024/btcusd_2024-01-01_to_2024-01-31.csv")
+df = pd.read_csv("btcusd_2024-01-01_to_2024-12-31.csv")
 
 # Ensure time is in datetime format
 df["time"] = pd.to_datetime(df["time"])
@@ -137,7 +138,7 @@ y = discrete_labels # Simulated percentage changes
 # Discretize continuous labels into 11 classes
 bins = [-np.inf, -0.05, -0.04, -0.03, -0.02, -0.01, 0.01, 0.02, 0.03, 0.04, 0.05, np.inf]
 labels = [5, 6, 7, 8, 9, 10, 0, 1, 2, 3, 4]  # 5-9: sell, 10: hold, 0-4: buy
-y_discretized = pd.cut(y, bins=bins, labels=labels).astype(int)  # Convert to discrete integers
+y_discretized = pd.cut(discrete_labels, bins=bins, labels=labels).astype(int)  # Convert to discrete integers
 
 # Split the data into train and test sets
 X_train, X_test, y_train, y_test = train_test_split(daily_data, y_discretized, test_size=0.2, random_state=42)
@@ -145,9 +146,9 @@ X_train, X_test, y_train, y_test = train_test_split(daily_data, y_discretized, t
 # Build the LSTM model
 model = Sequential([
     LSTM(128, input_shape=(1440, X_train.shape[2]), return_sequences=False),
-    Dropout(0.2),
+    Dropout(0.3),
     Dense(64, activation="relu"),
-    Dropout(0.2),
+    Dropout(0.3),
     Dense(11, activation="softmax")  # 11 classes
 ])
 
@@ -201,3 +202,24 @@ print(f'len of pred classes: {len(predicted_classes)}')
 print(len(actions))
 for i, action in enumerate(actions[:10]):
     print(f"Day {i+1}: {action}")
+
+# Count the occurrences of each class in the predictions
+prediction_counts = Counter(predicted_classes)
+
+# Display the distribution
+total_predictions = len(predicted_classes)
+for cls, count in prediction_counts.items():
+    print(f"Class {cls}: {count} ({count / total_predictions:.2%})")
+
+# Check the predicted probabilities for a sample
+sample_probs = model.predict(X_test[:10])  # Predicted probabilities
+print("Predicted Probabilities:\n", sample_probs)
+
+# Check the predicted classes
+sample_classes = tf.argmax(sample_probs, axis=1).numpy()
+print("Predicted Classes:", sample_classes)
+
+# Compare with true labels
+print("True Labels:", y_test[:10])
+
+model.save('my_1stmodel.keras')

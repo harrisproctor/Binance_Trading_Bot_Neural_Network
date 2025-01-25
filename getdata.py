@@ -41,7 +41,7 @@ def fetch_historical_data(symbol, interval, start_date, end_date):
 # Parameters
 symbol = "BTCUSDT"
 interval = Client.KLINE_INTERVAL_1MINUTE
-start_date = "2024-12-01"  # Start from a much earlier date
+start_date = "2022-01-01"  # Start from a much earlier date
 end_date = "2024-12-31"
 
 # Fetch data
