@@ -4,9 +4,11 @@ from binance.client import Client
 from tensorflow.keras.models import load_model
 import numpy as np
 import pandas as pd
+import datetime as dt
+import math
 
 # Load the model
-model = load_model('my_3rdmodel.keras')  # Load HDF5 format
+model = load_model('my_4thmodel.keras')  # Load HDF5 format
 # Test with some sample data
 #for i in range(1, 101):  # Loop 100 times
  #   sample_input = np.random.rand(1, 1440, 5)  # Replace with actual test data
@@ -41,7 +43,15 @@ buy_price_thershold = 60000
 sell_price_thershold = 68000
 trade_quantity = 0.001
 
+# Get trading rules for BTCUSDT
+symbol_info = client.get_symbol_info(symbol)
 
+# Extract step size (minimum quantity increment)
+step_size = float([f for f in symbol_info['filters'] if f['filterType'] == 'LOT_SIZE'][0]['stepSize'])
+
+# Function to round quantity down to valid step size
+def round_step_size(value, step_size):
+    return math.floor(value / step_size) * step_size
 
 def get_current_price(symbol):
     ticker = client.get_symbol_ticker(symbol=symbol)
@@ -49,11 +59,17 @@ def get_current_price(symbol):
 
 
 def place_buy_order(symbol,quantity):
+    curprice = get_current_price(symbol)
+    quantity = quantity / curprice
+    quantity = round_step_size(quantity, step_size)
     order = client.order_market_buy(symbol=symbol, quantity = quantity)
     print(f"bought: {order}")
 #place_buy_order(symbol,trade_quantity)
 
 def place_sell_order(symbol,quantity):
+    curprice = get_current_price(symbol)
+    quantity = quantity / curprice
+    quantity = round_step_size(quantity, step_size)
     order = client.order_market_sell(symbol=symbol,quantity = quantity)
     print(f"sold: {order}")
 
@@ -109,14 +125,35 @@ def tradingbot():
         data_array = df_processed.to_numpy()
         print(data_array.shape)  # Shape: (1440, 5)
         data_array = data_array.reshape(1, 1440, 5)
-        prediction = model.predict(data_array)
-        print("Prediction:", np.argmax(prediction, axis=1))
+        prediction = model.predict(data_array)  # Returns an array
+        predicted_int = int(np.argmax(prediction, axis=1)[0])  # Convert first element to int
+
+        print("Prediction:", predicted_int)
+        if(predicted_int == 0):
+            place_sell_order(symbol,20)
+        elif(predicted_int == 1):
+            place_buy_order(symbol,20)
+
+
+        #print("Prediction:", prediction)
+        timme = dt.datetime.now()
+        usdt_balance = float(client.get_asset_balance(asset="USDT")['free'])
+        btc_balance = float(client.get_asset_balance(asset="BTC")['free'])
+        totval = usdt_balance + (btc_balance * curprice)
+        # Data to append (as a DataFrame)
+        #print(usdt_balance['free'])
+        #print(btc_balance['free'])
+        dfff = pd.DataFrame([[timme, curprice, usdt_balance,btc_balance,totval,predicted_int]], columns=["datetime","BitPrice", "USDBal", "BitBal","totalval","Prediction"])
+
+        # Append to the CSV file without overwriting (mode='a' and header=False to avoid duplicate headers)
+        dfff.to_csv("testingoutput.csv", mode="a", index=False, header=False)
 
 
 
 
 
-        time.sleep(60)
+
+        time.sleep(900)
 
 tradingbot()
 
